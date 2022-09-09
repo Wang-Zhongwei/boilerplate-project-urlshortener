@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const bodyParser = require('body-parser');
 const app = express();
 
 // Basic Configuration
@@ -9,6 +10,10 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 
 app.use('/public', express.static(`${process.cwd()}/public`));
+
+// Enable body parsing
+app.use(bodyParser.urlencoded({ extended: false }));
+
 
 app.get('/', function(req, res) {
   res.sendFile(process.cwd() + '/views/index.html');
@@ -32,8 +37,15 @@ const generateShortUrl = function() {
     return shortUrl;
 }
 
+/** Make short URLs out of original URLs */
 app.post('/api/shorturl', function(req, res) {
   let longUrl = req.body.url;
+
+  // verify url by dns
+  if (!longUrl.match(/^https?:\/\//)) {
+    return res.json({ error: 'invalid url' });
+  }
+
   let shortUrl = null;
   if (longToShort.has(longUrl)) {
     shortUrl = longToShort.get(longUrl);
@@ -42,7 +54,18 @@ app.post('/api/shorturl', function(req, res) {
     longToShort.set(longUrl, shortUrl);
     shortToLong.set(shortUrl, longUrl);
   }
+
   res.json({ original_url: longUrl, short_url: shortUrl });
+});
+
+/** Redirect short URLs to original URLs */
+app.get('/api/shorturl/:shortUrl', function(req, res) {
+  let shortUrl = req.params.shortUrl;
+  if (shortToLong.has(shortUrl)) {
+    res.redirect(shortToLong.get(shortUrl));
+  } else {
+    res.json({ error: 'invalid url' });
+  }
 });
 
 app.listen(port, function() {
